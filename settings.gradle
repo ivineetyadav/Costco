@@ -1,0 +1,5 @@
+rootProject.name = 'costco-saas'
+
+include 'costco-common'
+include 'costco-api'
+include 'costco-iot-ingestion'

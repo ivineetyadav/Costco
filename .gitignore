@@ -1,0 +1,35 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+*.env.local
+
+# Certificates
+device-simulator/certs/*.pem
+device-simulator/certs/*.key
+!device-simulator/certs/.gitkeep
+!device-simulator/certs/README.md
+
+# Node
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Logs
+*.log
+
+# LocalStack
+localstack_data/

@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: costco-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: costco_saas
+      POSTGRES_USER: costco_admin
+      POSTGRES_PASSWORD: costco_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U costco_admin -d costco_saas"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  localstack:
+    image: localstack/localstack:3.0
+    container_name: costco-localstack
+    ports:
+      - "4566:4566"
+    environment:
+      SERVICES: sqs,s3,iot
+      DEFAULT_REGION: ap-south-1
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - ./localstack-init:/etc/localstack/init/ready.d
+
+volumes:
+  postgres_data:
+  localstack_data:
