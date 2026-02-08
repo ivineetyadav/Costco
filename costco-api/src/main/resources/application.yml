@@ -35,7 +35,7 @@ jwt:
 aws:
   region: ${AWS_REGION:ap-south-1}
   sqs:
-    queue-url: ${AWS_SQS_QUEUE_URL:}
+    queue-url: ${AWS_SQS_QUEUE_URL:https://sqs.ap-south-1.amazonaws.com/824309437901/costco-telemetry-queue}
     poll-interval-ms: 5000
     endpoint: ${AWS_SQS_ENDPOINT:}
   s3:

@@ -1,10 +1,10 @@
-iot_endpoint: "your-endpoint.iot.ap-south-1.amazonaws.com"
+iot_endpoint: "a3gzj4scvxvugr-ats.iot.ap-south-1.amazonaws.com"
 
 devices:
   - device_id: "DEV-001"
-    machine_id: "MACH-001"
-    cert_path: "certs/DEV-001-cert.pem"
-    key_path: "certs/DEV-001-private.key"
+    machine_id: "01KGZB9ACTFGSS5Z92V9YYQP14"
+    cert_path: "certs/583f0ca53e1ad34274c55cbbaa378baaa114aa855f85b5083a37f76a8a6da086-certificate.pem.crt"
+    key_path: "certs/583f0ca53e1ad34274c55cbbaa378baaa114aa855f85b5083a37f76a8a6da086-private.pem.key"
     root_ca_path: "certs/AmazonRootCA1.pem"
     interval_seconds: 30
 
