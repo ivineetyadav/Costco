@@ -22,7 +22,7 @@ dependencies {
     // Database
     runtimeOnly 'org.postgresql:postgresql'
     implementation 'org.flywaydb:flyway-core'
-    runtimeOnly 'org.flywaydb:flyway-database-postgresql'
+    runtimeOnly 'org.flywaydb:flyway-database-postgresql:10.8.1'
 
     // AWS
     implementation platform('software.amazon.awssdk:bom:2.24.13')
