@@ -1,9 +1,9 @@
 -- V1: Core schema for Costco Mining SaaS Platform
--- All primary keys use ULID (CHAR(26))
+-- All primary keys use ULID (VARCHAR(26))
 
 -- Vendors who rent machines
 CREATE TABLE vendors (
-    id              CHAR(26) PRIMARY KEY,
+    id              VARCHAR(26) PRIMARY KEY,
     company_name    VARCHAR(200) NOT NULL,
     contact_name    VARCHAR(200),
     email           VARCHAR(200),
@@ -14,7 +14,7 @@ CREATE TABLE vendors (
 
 -- Machines registry
 CREATE TABLE machines (
-    id              CHAR(26) PRIMARY KEY,
+    id              VARCHAR(26) PRIMARY KEY,
     name            VARCHAR(200) NOT NULL,
     type            VARCHAR(100),
     model           VARCHAR(100),
@@ -27,12 +27,12 @@ CREATE TABLE machines (
 
 -- Users (database-managed auth)
 CREATE TABLE users (
-    id              CHAR(26) PRIMARY KEY,
+    id              VARCHAR(26) PRIMARY KEY,
     email           VARCHAR(200) UNIQUE NOT NULL,
     full_name       VARCHAR(200),
     password_hash   VARCHAR(200) NOT NULL,
     role            VARCHAR(20) NOT NULL,
-    vendor_id       CHAR(26) REFERENCES vendors(id),
+    vendor_id       VARCHAR(26) REFERENCES vendors(id),
     refresh_token   VARCHAR(500),
     is_active       BOOLEAN DEFAULT TRUE,
     last_login_at   TIMESTAMP,
@@ -42,9 +42,9 @@ CREATE TABLE users (
 
 -- Rental contracts
 CREATE TABLE contracts (
-    id              CHAR(26) PRIMARY KEY,
-    machine_id      CHAR(26) NOT NULL REFERENCES machines(id),
-    vendor_id       CHAR(26) NOT NULL REFERENCES vendors(id),
+    id              VARCHAR(26) PRIMARY KEY,
+    machine_id      VARCHAR(26) NOT NULL REFERENCES machines(id),
+    vendor_id       VARCHAR(26) NOT NULL REFERENCES vendors(id),
     start_date      DATE NOT NULL,
     end_date        DATE,
     rate_per_hour   DECIMAL(10,2) NOT NULL,
@@ -56,12 +56,12 @@ CREATE TABLE contracts (
 
 -- Network devices (with validation states)
 CREATE TABLE devices (
-    id              CHAR(26) PRIMARY KEY,
-    machine_id      CHAR(26) REFERENCES machines(id),
+    id              VARCHAR(26) PRIMARY KEY,
+    machine_id      VARCHAR(26) REFERENCES machines(id),
     device_serial   VARCHAR(100) UNIQUE NOT NULL,
     iot_thing_name  VARCHAR(100) UNIQUE NOT NULL,
     status          VARCHAR(20) DEFAULT 'PENDING',
-    approved_by     CHAR(26) REFERENCES users(id),
+    approved_by     VARCHAR(26) REFERENCES users(id),
     approved_at     TIMESTAMP,
     last_seen_at    TIMESTAMP,
     created_at      TIMESTAMP DEFAULT NOW(),
@@ -70,9 +70,9 @@ CREATE TABLE devices (
 
 -- Raw telemetry (partitioned by month)
 CREATE TABLE telemetry (
-    id              CHAR(26) NOT NULL,
-    device_id       CHAR(26) NOT NULL,
-    machine_id      CHAR(26) NOT NULL,
+    id              VARCHAR(26) NOT NULL,
+    device_id       VARCHAR(26) NOT NULL,
+    machine_id      VARCHAR(26) NOT NULL,
     timestamp       TIMESTAMPTZ NOT NULL,
     engine_running  BOOLEAN,
     engine_hours    DECIMAL(10,2),
@@ -108,10 +108,10 @@ CREATE TABLE telemetry_2026_q2 PARTITION OF telemetry
 
 -- Usage summaries
 CREATE TABLE usage_reports (
-    id              CHAR(26) PRIMARY KEY,
-    contract_id     CHAR(26) REFERENCES contracts(id),
-    machine_id      CHAR(26) REFERENCES machines(id),
-    vendor_id       CHAR(26) REFERENCES vendors(id),
+    id              VARCHAR(26) PRIMARY KEY,
+    contract_id     VARCHAR(26) REFERENCES contracts(id),
+    machine_id      VARCHAR(26) REFERENCES machines(id),
+    vendor_id       VARCHAR(26) REFERENCES vendors(id),
     period_start    DATE,
     period_end      DATE,
     total_hours     DECIMAL(10,2),

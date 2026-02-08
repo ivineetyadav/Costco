@@ -5,7 +5,7 @@ spring:
   application:
     name: costco-saas-api
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/costco_saas}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/costco_saas}
     username: ${SPRING_DATASOURCE_USERNAME:costco_admin}
     password: ${SPRING_DATASOURCE_PASSWORD:costco_password}
     driver-class-name: org.postgresql.Driver

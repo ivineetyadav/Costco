@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
 Costco Mining - Device Simulator
-Simulates network devices sending telemetry data to AWS IoT Core via MQTT.
+Simulates network devices sending telemetry data to AWS IoT Core via MQTT,
+or directly to the Spring Boot API in local mode.
 
 Usage:
-    python device_simulator.py                    # Uses config.yaml
-    python device_simulator.py --config my.yaml   # Custom config
-    python device_simulator.py --device DEV-001   # Simulate single device
+    python device_simulator.py --local                 # Local mode (HTTP to Spring Boot API)
+    python device_simulator.py                         # AWS IoT Core mode (MQTT, requires certs)
+    python device_simulator.py --config my.yaml        # Custom config
+    python device_simulator.py --device DEV-001        # Simulate single device
 """
 
 import argparse
@@ -17,6 +19,8 @@ import signal
 import sys
 import threading
 import time
+import urllib.request
+import urllib.error
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -27,8 +31,11 @@ try:
     from awsiot import mqtt_connection_builder
     USE_AWS_IOT_SDK = True
 except ImportError:
-    import paho.mqtt.client as paho_mqtt
-    USE_AWS_IOT_SDK = False
+    try:
+        import paho.mqtt.client as paho_mqtt
+        USE_AWS_IOT_SDK = False
+    except ImportError:
+        USE_AWS_IOT_SDK = False
 
 logging.basicConfig(
     level=logging.INFO,
@@ -48,8 +55,88 @@ signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
 
-class DeviceSimulator:
-    """Simulates a single network device sending telemetry."""
+class TelemetryGenerator:
+    """Generates simulated telemetry data for a device."""
+
+    def __init__(self, device_id: str, machine_id: str, interval: int):
+        self.device_id = device_id
+        self.machine_id = machine_id
+        self.interval = interval
+        self.engine_hours = random.uniform(100, 5000)
+        self.engine_running = True
+        self.fuel_level = random.uniform(30, 100)
+
+    def generate(self) -> dict:
+        if random.random() < 0.05:
+            self.engine_running = not self.engine_running
+
+        if self.engine_running:
+            self.engine_hours += self.interval / 3600.0
+            self.fuel_level = max(0, self.fuel_level - random.uniform(0.01, 0.05))
+
+        base_lat = -26.2041 + random.uniform(-0.01, 0.01)
+        base_lng = 28.0473 + random.uniform(-0.01, 0.01)
+
+        return {
+            "deviceId": self.device_id,
+            "machineId": self.machine_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "engineRunning": self.engine_running,
+            "engineHours": round(self.engine_hours, 2),
+            "fuelLevel": round(self.fuel_level, 2),
+            "locationLat": round(base_lat, 6),
+            "locationLng": round(base_lng, 6),
+            "voltage": round(random.uniform(220, 240), 1),
+            "temperature": round(random.uniform(60, 95), 1),
+            "vibration": round(random.uniform(0.1, 5.0), 2)
+        }
+
+
+class LocalSimulator:
+    """Sends telemetry directly to the Spring Boot API via HTTP (for local dev)."""
+
+    def __init__(self, device_config: dict, api_url: str):
+        self.device_id = device_config['device_id']
+        self.machine_id = device_config['machine_id']
+        self.interval = device_config.get('interval_seconds', 30)
+        self.api_url = api_url.rstrip('/')
+        self.generator = TelemetryGenerator(self.device_id, self.machine_id, self.interval)
+
+    def publish(self, payload: dict):
+        data = json.dumps(payload).encode('utf-8')
+        req = urllib.request.Request(
+            f"{self.api_url}/api/telemetry/ingest",
+            data=data,
+            headers={'Content-Type': 'application/json'},
+            method='POST'
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                logger.info(f"[{self.device_id}] Sent (HTTP {resp.status}): "
+                           f"engine={'ON' if payload['engineRunning'] else 'OFF'}, "
+                           f"hours={payload['engineHours']}, fuel={payload['fuelLevel']}%")
+        except urllib.error.HTTPError as e:
+            logger.warning(f"[{self.device_id}] HTTP {e.code}: {e.reason}")
+        except urllib.error.URLError as e:
+            logger.error(f"[{self.device_id}] Connection failed: {e.reason}")
+
+    def run(self):
+        logger.info(f"[{self.device_id}] Starting LOCAL telemetry loop (interval: {self.interval}s)")
+        while not shutdown_event.is_set():
+            try:
+                payload = self.generator.generate()
+                self.publish(payload)
+            except Exception as e:
+                logger.error(f"[{self.device_id}] Error: {e}")
+            shutdown_event.wait(timeout=self.interval)
+        logger.info(f"[{self.device_id}] Stopped")
+
+    def disconnect(self):
+        pass
+
+
+class MqttSimulator:
+    """Sends telemetry via MQTT to AWS IoT Core (requires X.509 certs)."""
 
     def __init__(self, device_config: dict, iot_endpoint: str):
         self.device_id = device_config['device_id']
@@ -61,12 +148,9 @@ class DeviceSimulator:
         self.iot_endpoint = iot_endpoint
         self.topic = f"costco/machines/{self.machine_id}/telemetry"
         self.connection = None
-        self.engine_hours = random.uniform(100, 5000)
-        self.engine_running = True
-        self.fuel_level = random.uniform(30, 100)
+        self.generator = TelemetryGenerator(self.device_id, self.machine_id, self.interval)
 
     def connect(self):
-        """Establish MQTT connection to AWS IoT Core."""
         if USE_AWS_IOT_SDK:
             self.connection = mqtt_connection_builder.mtls_from_path(
                 endpoint=self.iot_endpoint,
@@ -91,38 +175,8 @@ class DeviceSimulator:
             self.connection.loop_start()
             logger.info(f"[{self.device_id}] Connected to IoT Core (paho-mqtt)")
 
-    def generate_telemetry(self) -> dict:
-        """Generate simulated telemetry data."""
-        # Simulate engine state changes
-        if random.random() < 0.05:  # 5% chance of state change
-            self.engine_running = not self.engine_running
-
-        if self.engine_running:
-            self.engine_hours += self.interval / 3600.0
-            self.fuel_level = max(0, self.fuel_level - random.uniform(0.01, 0.05))
-
-        # Simulate location (Johannesburg mining area)
-        base_lat = -26.2041 + random.uniform(-0.01, 0.01)
-        base_lng = 28.0473 + random.uniform(-0.01, 0.01)
-
-        return {
-            "deviceId": self.device_id,
-            "machineId": self.machine_id,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "engineRunning": self.engine_running,
-            "engineHours": round(self.engine_hours, 2),
-            "fuelLevel": round(self.fuel_level, 2),
-            "locationLat": round(base_lat, 6),
-            "locationLng": round(base_lng, 6),
-            "voltage": round(random.uniform(220, 240), 1),
-            "temperature": round(random.uniform(60, 95), 1),
-            "vibration": round(random.uniform(0.1, 5.0), 2)
-        }
-
     def publish(self, payload: dict):
-        """Publish telemetry message to MQTT topic."""
         message = json.dumps(payload)
-
         if USE_AWS_IOT_SDK:
             self.connection.publish(
                 topic=self.topic,
@@ -131,28 +185,22 @@ class DeviceSimulator:
             )
         else:
             self.connection.publish(self.topic, message, qos=1)
-
         logger.info(f"[{self.device_id}] Published: engine={'ON' if payload['engineRunning'] else 'OFF'}, "
                      f"hours={payload['engineHours']}, fuel={payload['fuelLevel']}%")
 
     def run(self):
-        """Main loop: generate and publish telemetry at configured interval."""
         self.connect()
-        logger.info(f"[{self.device_id}] Starting telemetry loop (interval: {self.interval}s)")
-
+        logger.info(f"[{self.device_id}] Starting MQTT telemetry loop (interval: {self.interval}s)")
         while not shutdown_event.is_set():
             try:
-                payload = self.generate_telemetry()
+                payload = self.generator.generate()
                 self.publish(payload)
             except Exception as e:
                 logger.error(f"[{self.device_id}] Error: {e}")
-
             shutdown_event.wait(timeout=self.interval)
-
         logger.info(f"[{self.device_id}] Stopped")
 
     def disconnect(self):
-        """Disconnect from MQTT broker."""
         if self.connection:
             if USE_AWS_IOT_SDK:
                 self.connection.disconnect().result(timeout=5)
@@ -162,12 +210,10 @@ class DeviceSimulator:
 
 
 def load_config(config_path: str) -> dict:
-    """Load configuration from YAML file."""
     path = Path(config_path)
     if not path.exists():
         logger.error(f"Config file not found: {config_path}")
         sys.exit(1)
-
     with open(path, 'r') as f:
         return yaml.safe_load(f)
 
@@ -176,10 +222,13 @@ def main():
     parser = argparse.ArgumentParser(description='Costco Mining Device Simulator')
     parser.add_argument('--config', default='config.yaml', help='Path to config file')
     parser.add_argument('--device', help='Simulate only this device ID')
+    parser.add_argument('--local', action='store_true',
+                       help='Local mode: send telemetry via HTTP to Spring Boot API (no certs needed)')
+    parser.add_argument('--api-url', default='http://localhost:8080',
+                       help='Spring Boot API URL for local mode (default: http://localhost:8080)')
     args = parser.parse_args()
 
     config = load_config(args.config)
-    iot_endpoint = config['iot_endpoint']
     devices_config = config['devices']
 
     if args.device:
@@ -188,13 +237,17 @@ def main():
             logger.error(f"Device {args.device} not found in config")
             sys.exit(1)
 
-    logger.info(f"Starting simulator for {len(devices_config)} device(s)")
+    mode = "LOCAL (HTTP)" if args.local else "MQTT (IoT Core)"
+    logger.info(f"Starting simulator for {len(devices_config)} device(s) in {mode} mode")
 
     threads = []
     simulators = []
 
     for device_cfg in devices_config:
-        sim = DeviceSimulator(device_cfg, iot_endpoint)
+        if args.local:
+            sim = LocalSimulator(device_cfg, args.api_url)
+        else:
+            sim = MqttSimulator(device_cfg, config['iot_endpoint'])
         simulators.append(sim)
         t = threading.Thread(target=sim.run, name=f"device-{device_cfg['device_id']}", daemon=True)
         threads.append(t)
