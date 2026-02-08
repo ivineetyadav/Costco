@@ -2,6 +2,8 @@ package za.co.costcomining.common.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import za.co.costcomining.common.util.UlidGenerator;
 
 import java.math.BigDecimal;
@@ -45,6 +47,7 @@ public class Telemetry {
     private BigDecimal locationLng;
 
     @Column(name = "payload_json", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String payloadJson;
 
     @Column(name = "received_at")

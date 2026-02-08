@@ -5,7 +5,7 @@ VALUES (
     '01HYX3K0000000000000000000',
     'admin@costcomining.co.za',
     'System Admin',
-    '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
+    '$2b$10$A0aBq65pdg9sW8/ULZAPs.1utoB0BxpQm.oJgl60flzGVZPiqwv9O',
     'ADMIN',
     NULL,
     TRUE,
